@@ -11,7 +11,7 @@ Each row is a case the HR manager or a hostile client can actually hit. “Where
 | More than two decimal places, a leading minus, or scientific notation | Field error | `MoneyTextTest` |
 | Base of zero or a negative bonus | Field error | `MoneyTextTest` |
 | Salary above the band with no exception reason | 422, nothing stored | `CompensationPolicyTest`, `EmployeeApiTest` |
-| Salary above the band with a real exception reason | Stored, band position `ABOVE` | `EmployeeApiTest.acceptsAnOutOfBandSalaryWhenTheExceptionIsWrittenDown` |
+| Salary above the band with a real exception reason | Stored, band position `ABOVE` | `CompensationPolicyTest.salaryOutsideTheBandNeedsAnException` |
 | Merit increase of exactly 25% | Allowed | `CompensationPolicyTest.meritAtExactlyTwentyFivePercentIsAllowed` |
 | Merit increase above 25% | Rejected until an exception reason is present | `CompensationPolicyTest` |
 | Adjustment relabeled to dodge the cap | Same cap as merit | `CompensationPolicyTest.adjustmentCannotBypassTheIncreaseCap` |

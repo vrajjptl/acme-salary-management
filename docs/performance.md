@@ -33,6 +33,10 @@ A pay change is a handful of indexed reads, one insert, one projection upsert, a
 
 The unit suite, including a 2,000-person generated population passed through the real policy, is the regression check for “the rules are not quadratic in a scary way”. The API test uses a small fixture. The 10,000-person seed is the manual scale check: start the application against an empty `data/` directory and confirm the process becomes ready and the directory still pages.
 
+## Keeping current pay honest
+
+The first directory or dashboard read of a UTC date rebuilds `current_compensation` from history, so a future-dated row becomes current on the day it takes effect. Opening one employee refreshes that person immediately. Each accepted pay change refreshes that person in the same transaction. The “already built today” flag lives in the process, which matches the single SQLite file.
+
 ## When this design should change
 
-Move aggregation into SQL or a summary table before 100,000 employees. Move off SQLite before more than one application instance. Add a job to roll future-dated rows into `current_compensation` if the process is expected to stay up across the effective date without a write; today, opening the employee or recording any change refreshes that employee, and startup does not scan for due future rows. At this scale, restarting the app the next morning is not the refresh strategy — the employee read path refreshes current pay for that person. The dashboard reads the projection, so a future-dated row that becomes due overnight appears after that employee is read or after the next write. For a demo that is acceptable. A daily refresh is the production follow-up and is noted here so it is not forgotten.
+Move aggregation into SQL or a summary table before 100,000 employees. Move off SQLite before more than one application instance, and move the daily rebuild flag with it so two processes cannot each assume they are current.

@@ -35,7 +35,7 @@ Compensation data is confidential even when every row is fictional. The controls
 
 ## Headers and browser
 
-- Content-Security-Policy: `default-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'`.
+- Content-Security-Policy: `default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'`. Inline style attributes are limited to bar positions computed by the app. Employee text is not inserted as HTML.
 - Frame denial, `nosniff`, and a no-referrer policy are enabled.
 - The UI does not render HTML from employee fields. Values go through React text nodes.
 - HSTS is not set on this HTTP demo. Turn it on only behind HTTPS, or browsers will cache it for localhost.
