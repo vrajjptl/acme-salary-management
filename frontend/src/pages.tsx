@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError, api } from './api'
 import { BandMeter, Banner } from './components'
-import { bandLabel, compa, count, money, titleCase, usd } from './format'
+import { bandLabel, compa, count, money, titleCase, todayUtc, usd } from './format'
 import type { Analytics, AuditPage, EmployeeDetail, EmployeePage, Meta } from './types'
 
 function useMeta() {
@@ -235,7 +235,7 @@ export function PeoplePage() {
       </div>
       <form className="filters" onSubmit={(event) => { event.preventDefault(); update('q', draft.trim()) }}>
         <label className="field grow">Search
-          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Name, email, or employee number" />
+          <input value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Name, email, or employee number" autoComplete="off" spellCheck={false} />
         </label>
         <label className="field">Country
           <select value={params.get('country') ?? ''} onChange={(event) => update('country', event.target.value)}>
@@ -319,7 +319,7 @@ export function NewEmployeePage() {
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', country: 'US', department: 'ENGINEERING',
-    jobTitle: '', jobLevel: 'L3', gender: 'UNDISCLOSED', hireDate: '2026-11-02',
+    jobTitle: '', jobLevel: 'L3', gender: 'UNDISCLOSED', hireDate: todayUtc(),
     baseSalary: '', annualBonus: '0.00', allowances: '0.00', reason: '', exceptionReason: ''
   })
 
@@ -360,7 +360,7 @@ export function NewEmployeePage() {
         <Banner error={error} />
         <Text label="First name" value={form.firstName} onChange={(value) => set('firstName', value)} />
         <Text label="Last name" value={form.lastName} onChange={(value) => set('lastName', value)} />
-        <Text label="Email" value={form.email} onChange={(value) => set('email', value)} />
+        <Text label="Email" value={form.email} onChange={(value) => set('email', value)} type="email" autoComplete="off" />
         <Select label="Country" value={form.country} onChange={(value) => set('country', value)} options={meta?.countries ?? []} />
         <Select label="Department" value={form.department} onChange={(value) => set('department', value)} options={meta?.departments ?? []} />
         <Text label="Job title" value={form.jobTitle} onChange={(value) => set('jobTitle', value)} />
@@ -371,9 +371,9 @@ export function NewEmployeePage() {
         </label>
         <Select label="Gender" value={form.gender} onChange={(value) => set('gender', value)} options={meta?.genders ?? []} />
         <Text label="Hire date" value={form.hireDate} onChange={(value) => set('hireDate', value)} type="date" />
-        <Text label="Annual base" value={form.baseSalary} onChange={(value) => set('baseSalary', value)} />
-        <Text label="Annual bonus" value={form.annualBonus} onChange={(value) => set('annualBonus', value)} />
-        <Text label="Annual allowances" value={form.allowances} onChange={(value) => set('allowances', value)} />
+        <Text label="Annual base" value={form.baseSalary} onChange={(value) => set('baseSalary', value)} inputMode="decimal" />
+        <Text label="Annual bonus" value={form.annualBonus} onChange={(value) => set('annualBonus', value)} inputMode="decimal" />
+        <Text label="Annual allowances" value={form.allowances} onChange={(value) => set('allowances', value)} inputMode="decimal" />
         <Text label="Note" value={form.reason} onChange={(value) => set('reason', value)} />
         <Text label="Exception reason" value={form.exceptionReason} onChange={(value) => set('exceptionReason', value)} />
         <button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Create employee'}</button>
@@ -389,7 +389,7 @@ export function EmployeePage() {
   const [error, setError] = useState<string[] | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [changeType, setChangeType] = useState('MERIT')
-  const [effectiveDate, setEffectiveDate] = useState('2026-11-02')
+  const [effectiveDate, setEffectiveDate] = useState(todayUtc)
   const [baseSalary, setBaseSalary] = useState('')
   const [bonus, setBonus] = useState('0.00')
   const [allowances, setAllowances] = useState('0.00')
@@ -397,7 +397,10 @@ export function EmployeePage() {
   const [jobTitle, setJobTitle] = useState('')
   const [reason, setReason] = useState('')
   const [exceptionReason, setExceptionReason] = useState('')
-  const [terminationDate, setTerminationDate] = useState('2026-11-02')
+  const [terminationDate, setTerminationDate] = useState(todayUtc)
+  const [savingPay, setSavingPay] = useState(false)
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [profile, setProfile] = useState({ firstName: '', lastName: '', jobTitle: '', department: '', gender: '' })
 
   function load() {
     api<EmployeeDetail>(`/api/employees/${id}`)
@@ -408,6 +411,13 @@ export function EmployeePage() {
         setAllowances(next.employee.allowances ?? '0.00')
         setJobLevel(next.employee.jobLevel)
         setJobTitle(next.employee.jobTitle)
+        setProfile({
+          firstName: next.employee.firstName,
+          lastName: next.employee.lastName,
+          jobTitle: next.employee.jobTitle,
+          department: next.employee.department,
+          gender: next.employee.gender
+        })
         setError(null)
       })
       .catch((caught) => setError(problem(caught)))
@@ -418,6 +428,7 @@ export function EmployeePage() {
   async function submitChange(event: FormEvent) {
     event.preventDefault()
     setMessage(null)
+    setSavingPay(true)
     try {
       const next = await api<EmployeeDetail>(`/api/employees/${id}/compensation`, {
         method: 'POST',
@@ -438,6 +449,35 @@ export function EmployeePage() {
       setError(null)
     } catch (caught) {
       setError(problem(caught))
+    } finally {
+      setSavingPay(false)
+    }
+  }
+
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault()
+    setMessage(null)
+    setSavingProfile(true)
+    try {
+      const next = await api<EmployeeDetail>(`/api/employees/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(profile)
+      })
+      setDetail(next)
+      setJobTitle(next.employee.jobTitle)
+      setProfile({
+        firstName: next.employee.firstName,
+        lastName: next.employee.lastName,
+        jobTitle: next.employee.jobTitle,
+        department: next.employee.department,
+        gender: next.employee.gender
+      })
+      setMessage('Profile saved. Pay history was not changed.')
+      setError(null)
+    } catch (caught) {
+      setError(problem(caught))
+    } finally {
+      setSavingProfile(false)
     }
   }
 
@@ -464,7 +504,7 @@ export function EmployeePage() {
       <div className="page-head">
         <div>
           <h1>{person.firstName} {person.lastName}</h1>
-          <p>{person.employeeNumber} · {person.jobTitle} · {person.departmentName} · {person.countryName}</p>
+          <p>{person.employeeNumber} · {person.email} · {person.jobTitle} · {person.departmentName} · {person.countryName}</p>
         </div>
         <span className={person.status === 'ACTIVE' ? 'pill good' : 'pill'}>{titleCase(person.status)}</span>
       </div>
@@ -495,9 +535,9 @@ export function EmployeePage() {
                 </select>
               </label>
               <Text label="Effective date" value={effectiveDate} onChange={setEffectiveDate} type="date" />
-              <Text label="Annual base" value={baseSalary} onChange={setBaseSalary} />
-              <Text label="Annual bonus" value={bonus} onChange={setBonus} />
-              <Text label="Annual allowances" value={allowances} onChange={setAllowances} />
+              <Text label="Annual base" value={baseSalary} onChange={setBaseSalary} inputMode="decimal" />
+              <Text label="Annual bonus" value={bonus} onChange={setBonus} inputMode="decimal" />
+              <Text label="Annual allowances" value={allowances} onChange={setAllowances} inputMode="decimal" />
               {(changeType === 'PROMOTION' || changeType === 'CORRECTION') && (
                 <label className="field">New level
                   <select value={jobLevel} onChange={(event) => setJobLevel(event.target.value)}>
@@ -508,11 +548,24 @@ export function EmployeePage() {
               <Text label="Job title" value={jobTitle} onChange={setJobTitle} />
               <Text label="Reason" value={reason} onChange={setReason} />
               <Text label="Exception reason" value={exceptionReason} onChange={setExceptionReason} />
-              <button type="submit">Record change</button>
+              <p className="muted">A merit or adjustment above 25%, a decrease, or pay outside the band needs an exception reason.</p>
+              <button type="submit" disabled={savingPay}>{savingPay ? 'Saving…' : 'Record change'}</button>
             </form>
           )}
         </section>
       </div>
+      <section className="card">
+        <h2>Profile</h2>
+        <p className="muted">Name, title, department, and gender can be corrected. Email, country, and pay history stay as they are.</p>
+        <form className="form-grid" onSubmit={saveProfile}>
+          <Text label="First name" value={profile.firstName} onChange={(value) => setProfile((current) => ({ ...current, firstName: value }))} />
+          <Text label="Last name" value={profile.lastName} onChange={(value) => setProfile((current) => ({ ...current, lastName: value }))} />
+          <Text label="Job title" value={profile.jobTitle} onChange={(value) => setProfile((current) => ({ ...current, jobTitle: value }))} />
+          <Select label="Department" value={profile.department} onChange={(value) => setProfile((current) => ({ ...current, department: value }))} options={meta?.departments ?? []} />
+          <Select label="Gender" value={profile.gender} onChange={(value) => setProfile((current) => ({ ...current, gender: value }))} options={meta?.genders ?? []} />
+          <button type="submit" disabled={savingProfile}>{savingProfile ? 'Saving…' : 'Save profile'}</button>
+        </form>
+      </section>
       <section className="card">
         <h2>History</h2>
         <table>
@@ -592,10 +645,17 @@ export function AuditPage() {
   )
 }
 
-function Text({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) {
+function Text({ label, value, onChange, type = 'text', inputMode, autoComplete = 'off' }: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  type?: string
+  inputMode?: 'decimal' | 'email' | 'text'
+  autoComplete?: string
+}) {
   return (
     <label className="field">{label}
-      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+      <input type={type} value={value} inputMode={inputMode} autoComplete={autoComplete} spellCheck={false} onChange={(event) => onChange(event.target.value)} />
     </label>
   )
 }

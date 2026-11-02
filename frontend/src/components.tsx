@@ -1,16 +1,31 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { api } from './api'
 import type { User } from './types'
-import { money } from './format'
+import { money, titleCase } from './format'
 
 export function Shell({ user, onLogout, children }: { user: User; onLogout: () => void; children: ReactNode }) {
   const navigate = useNavigate()
+  const [signingOut, setSigningOut] = useState(false)
+  const [logoutError, setLogoutError] = useState<string | null>(null)
   async function logout() {
-    await api('/api/auth/logout', { method: 'POST' })
-    onLogout()
-    navigate('/login')
+    setSigningOut(true)
+    setLogoutError(null)
+    try {
+      await api('/api/auth/logout', { method: 'POST' })
+      onLogout()
+      navigate('/login')
+    } catch {
+      setLogoutError('Sign out did not complete.')
+      setSigningOut(false)
+    }
   }
+  const initials = user.username
+    .split(/[.\s_-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -18,16 +33,28 @@ export function Shell({ user, onLogout, children }: { user: User; onLogout: () =
           <strong>ACME</strong>
           <span>Compensation</span>
         </div>
-        <nav className="nav">
+        <nav className="nav" aria-label="Workspace">
           <NavLink to="/" end>How we pay</NavLink>
           <NavLink to="/people">People</NavLink>
           <NavLink to="/audit">Audit</NavLink>
         </nav>
-        <footer>
-          <div>{user.username}</div>
-          <button className="secondary" type="button" onClick={logout}>Sign out</button>
-        </footer>
       </aside>
+      <header className="topbar">
+        <div className="topbar-title">HR workspace</div>
+        <div className="account-block">
+          <div className="account">
+            <span className="avatar" aria-hidden="true">{initials || 'HR'}</span>
+            <span className="account-name">
+              <strong>{user.username}</strong>
+              <span>{titleCase(user.role)}</span>
+            </span>
+            <button className="sign-out" type="button" onClick={logout} disabled={signingOut}>
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </button>
+          </div>
+          {logoutError && <p className="logout-error" role="alert">{logoutError}</p>}
+        </div>
+      </header>
       <main className="main">{children}</main>
     </div>
   )

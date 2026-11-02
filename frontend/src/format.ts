@@ -41,3 +41,7 @@ export function count(value: number): string {
 export function titleCase(value: string): string {
   return value.charAt(0) + value.slice(1).toLowerCase().replaceAll('_', ' ')
 }
+
+export function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10)
+}
