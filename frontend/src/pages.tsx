@@ -2,7 +2,8 @@ import { FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError, api } from './api'
 import { BandMeter, Banner } from './components'
-import { bandLabel, compa, count, money, titleCase, todayUtc, usd } from './format'
+import { actionLabel, bandLabel, compa, count, money, titleCase, todayUtc, usd } from './format'
+import { previewPay } from './preview'
 import type { Analytics, AuditPage, EmployeeDetail, EmployeePage, Meta } from './types'
 
 function useMeta() {
@@ -98,7 +99,9 @@ export function DashboardPage() {
       <div className="page-head">
         <div>
           <h1>How we pay</h1>
-          <p>Active employees with pay already in effect. Figures are annual. USD uses the snapshot dated {data?.fxAsOf ?? '—'}.</p>
+          <p>{data
+            ? `${count(data.activeWithPay)} people are in payroll. Median base is ${usd(data.pay.medianBaseUsd)}. ${data.pay.outsideBandPercent}% sit outside their base band.`
+            : 'Active employees with pay already in effect.'}</p>
         </div>
       </div>
       <div className="filters">
@@ -114,6 +117,9 @@ export function DashboardPage() {
             {meta?.departments.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
           </select>
         </label>
+        {(country || department) && (
+          <button className="secondary" type="button" onClick={() => setParams(new URLSearchParams())}>Clear</button>
+        )}
       </div>
       <Banner error={error} />
       {!data ? <p>Loading the pay picture…</p> : (
@@ -134,7 +140,7 @@ export function DashboardPage() {
                 <span className="pill good">{count(data.pay.inBand)} in band</span>{' '}
                 <span className="pill warn">{count(data.pay.aboveBand)} above</span>
               </p>
-              <p className="muted">{count(data.formerHeadcount)} former employees are excluded. {count(data.scheduledHeadcount)} active people have only future-dated pay.</p>
+              <p className="muted">{count(data.formerHeadcount)} former employees are excluded. {count(data.scheduledHeadcount)} active people have only future-dated pay. USD uses the snapshot dated {data.fxAsOf}.</p>
             </section>
             <section className="card">
               <h2>Gender, base USD</h2>
@@ -157,8 +163,8 @@ export function DashboardPage() {
             </section>
           </div>
           <div className="stack">
-            <BreakdownCard title="By country" rows={data.pay.byCountry} />
-            <BreakdownCard title="By department" rows={data.pay.byDepartment} />
+            <BreakdownCard title="By country" rows={data.pay.byCountry} active={country} onPick={(key) => setFilter('country', key)} />
+            <BreakdownCard title="By department" rows={data.pay.byDepartment} active={department} onPick={(key) => setFilter('department', key)} />
             <BreakdownCard title="By level" rows={data.pay.byLevel} />
           </div>
           <ul className="note">
@@ -170,26 +176,36 @@ export function DashboardPage() {
   )
 }
 
-function BreakdownCard({ title, rows }: { title: string; rows: Analytics['pay']['byCountry'] }) {
+function BreakdownCard({ title, rows, onPick, active }: {
+  title: string
+  rows: Analytics['pay']['byCountry']
+  onPick?: (key: string) => void
+  active?: string
+}) {
   const max = Math.max(...rows.map((row) => Number(row.totalBaseUsd)), 1)
   return (
     <section className="card">
       <h2>{title}</h2>
+      {onPick && <p className="muted">Choose a row to focus the figures above. Choose it again to clear that focus.</p>}
       <table>
         <thead>
-          <tr><th>Group</th><th>People</th><th>Base payroll</th><th>Median</th><th>Outside</th></tr>
+          <tr><th>Group</th><th className="num">People</th><th>Base payroll</th><th className="num">Median</th><th className="num">Outside</th></tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.key}>
-              <td>{row.label}</td>
-              <td>{count(row.headcount)}</td>
+            <tr
+              key={row.key}
+              className={onPick ? 'clickable' : undefined}
+              onClick={onPick ? () => onPick(row.key === active ? '' : row.key) : undefined}
+            >
+              <td>{row.label}{row.key === active ? ' · focused' : ''}</td>
+              <td className="num">{count(row.headcount)}</td>
               <td>
                 {usd(row.totalBaseUsd)}
                 <div className="bar" aria-hidden="true"><i style={{ width: `${(Number(row.totalBaseUsd) / max) * 100}%` }} /></div>
               </td>
-              <td>{usd(row.medianBaseUsd)}</td>
-              <td>{count(row.belowBand + row.aboveBand)}</td>
+              <td className="num">{usd(row.medianBaseUsd)}</td>
+              <td className="num">{count(row.belowBand + row.aboveBand)}</td>
             </tr>
           ))}
         </tbody>
@@ -223,6 +239,19 @@ export function PeoplePage() {
 
   const page = Number(params.get('page') ?? '0')
   const pages = data ? Math.max(1, Math.ceil(data.total / data.size)) : 1
+  const sort = params.get('sort') ?? 'name'
+  const direction = params.get('direction') ?? 'asc'
+
+  function toggleSort(key: string) {
+    const next = new URLSearchParams(params)
+    if (sort === key) next.set('direction', direction === 'asc' ? 'desc' : 'asc')
+    else {
+      next.set('sort', key)
+      next.set('direction', key === 'baseSalaryUsd' ? 'desc' : 'asc')
+    }
+    next.delete('page')
+    setParams(next)
+  }
 
   return (
     <>
@@ -270,7 +299,13 @@ export function PeoplePage() {
           <table>
             <thead>
               <tr>
-                <th>Employee</th><th>Role</th><th>Location</th><th>Annual base</th><th>USD</th><th>Compa</th><th>Band</th>
+                <th><SortButton label="Employee" column="name" sort={sort} direction={direction} onSort={toggleSort} /></th>
+                <th><SortButton label="Level" column="level" sort={sort} direction={direction} onSort={toggleSort} /></th>
+                <th><SortButton label="Location" column="country" sort={sort} direction={direction} onSort={toggleSort} /></th>
+                <th className="num">Annual base</th>
+                <th className="num"><SortButton label="USD" column="baseSalaryUsd" sort={sort} direction={direction} onSort={toggleSort} /></th>
+                <th className="num">Compa</th>
+                <th>Band</th>
               </tr>
             </thead>
             <tbody>
@@ -282,9 +317,9 @@ export function PeoplePage() {
                   </td>
                   <td>{person.jobTitle}<div className="muted">{person.jobLevel} · {person.departmentName}</div></td>
                   <td>{person.countryName}</td>
-                  <td>{money(person.baseSalary, person.currency)}</td>
-                  <td>{usd(person.baseSalaryUsd)}</td>
-                  <td>{compa(person.compaRatio)}</td>
+                  <td className="num">{money(person.baseSalary, person.currency)}</td>
+                  <td className="num">{usd(person.baseSalaryUsd)}</td>
+                  <td className="num">{compa(person.compaRatio)}</td>
                   <td><span className={pillClass(person.bandPosition)}>{bandLabel(person.bandPosition)}</span></td>
                 </tr>
               ))}
@@ -303,6 +338,18 @@ export function PeoplePage() {
       </section>
     </>
   )
+}
+
+function SortButton({ label, column, sort, direction, onSort }: {
+  label: string
+  column: string
+  sort: string
+  direction: string
+  onSort: (column: string) => void
+}) {
+  const active = sort === column
+  const mark = active ? (direction === 'asc' ? ' ↑' : ' ↓') : ''
+  return <button className="sort" type="button" onClick={() => onSort(column)}>{label}{mark}</button>
 }
 
 function pillClass(position: string | null) {
@@ -352,6 +399,7 @@ export function NewEmployeePage() {
     <>
       <div className="page-head">
         <div>
+          <Link className="back" to="/people">People</Link>
           <h1>Add employee</h1>
           <p>The first salary is the hire record. It is effective on the hire date and is not edited later.</p>
         </div>
@@ -503,6 +551,7 @@ export function EmployeePage() {
     <>
       <div className="page-head">
         <div>
+          <Link className="back" to="/people">People</Link>
           <h1>{person.firstName} {person.lastName}</h1>
           <p>{person.employeeNumber} · {person.email} · {person.jobTitle} · {person.departmentName} · {person.countryName}</p>
         </div>
@@ -548,7 +597,20 @@ export function EmployeePage() {
               <Text label="Job title" value={jobTitle} onChange={setJobTitle} />
               <Text label="Reason" value={reason} onChange={setReason} />
               <Text label="Exception reason" value={exceptionReason} onChange={setExceptionReason} />
-              <p className="muted">A merit or adjustment above 25%, a decrease, or pay outside the band needs an exception reason.</p>
+              <PayCheck
+                changeType={changeType}
+                currentBase={person.baseSalary}
+                nextBase={baseSalary}
+                bandMin={detail.bandMin}
+                bandMax={detail.bandMax}
+                currency={person.currency}
+                effectiveDate={effectiveDate}
+                latestEffectiveDate={detail.history[0]?.effectiveDate ?? null}
+                currentLevel={person.jobLevel}
+                nextLevel={jobLevel}
+                reason={reason}
+                exceptionReason={exceptionReason}
+              />
               <button type="submit" disabled={savingPay}>{savingPay ? 'Saving…' : 'Record change'}</button>
             </form>
           )}
@@ -626,7 +688,7 @@ export function AuditPage() {
                 <tr key={row.id}>
                   <td>{row.occurredAt.replace('T', ' ').replace('Z', ' UTC')}</td>
                   <td>{row.actor}</td>
-                  <td>{row.action}</td>
+                  <td>{actionLabel(row.action)}</td>
                   <td>{row.summary}</td>
                 </tr>
               ))}
@@ -642,6 +704,31 @@ export function AuditPage() {
         </div>
       </section>
     </>
+  )
+}
+
+function PayCheck(props: {
+  changeType: string
+  currentBase: string | null
+  nextBase: string
+  bandMin: string | null
+  bandMax: string | null
+  currency: string | null
+  effectiveDate: string
+  latestEffectiveDate: string | null
+  currentLevel: string
+  nextLevel: string
+  reason: string
+  exceptionReason: string
+}) {
+  const preview = previewPay({ ...props, today: todayUtc() })
+  return (
+    <div className={`preview ${preview.tone}`} aria-live="polite">
+      <strong>{preview.tone === 'good' ? 'Ready' : preview.tone === 'warn' ? 'Check before saving' : 'Pay check'}</strong>
+      <ul>
+        {preview.items.map((item) => <li key={item}>{item}</li>)}
+      </ul>
+    </div>
   )
 }
 

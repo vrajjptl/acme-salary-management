@@ -175,8 +175,43 @@ button.sign-out:hover { background: #1b2623; color: white; }
 .page-head p, .lede {
   margin: 6px 0 0;
   color: #5e564c;
-  max-width: 62ch;
+  max-width: 68ch;
 }
+
+.back {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: #1f6b52;
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.num { text-align: right; }
+
+th button.sort {
+  background: transparent;
+  color: #6d645b;
+  border: 0;
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+th button.sort:hover { color: #1f6b52; }
+
+.preview {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f7f1e6;
+}
+
+.preview strong { display: block; margin-bottom: 6px; }
+.preview ul { margin: 0; padding-left: 18px; }
+.preview.good { background: #e5f3ec; }
+.preview.warn { background: #f8ead0; }
+.preview.neutral { background: #f7f1e6; }
 
 .stats {
   display: grid;

@@ -45,3 +45,20 @@ export function titleCase(value: string): string {
 export function todayUtc(): string {
   return new Date().toISOString().slice(0, 10)
 }
+
+const ACTIONS: Record<string, string> = {
+  LOGIN_SUCCESS: 'Signed in',
+  LOGIN_FAILURE: 'Sign-in failed',
+  LOGOUT: 'Signed out',
+  PROFILE_UPDATED: 'Profile updated',
+  EMPLOYEE_TERMINATED: 'Terminated',
+  COMPENSATION_HIRE: 'Hire recorded',
+  COMPENSATION_MERIT: 'Merit',
+  COMPENSATION_PROMOTION: 'Promotion',
+  COMPENSATION_ADJUSTMENT: 'Adjustment',
+  COMPENSATION_CORRECTION: 'Correction'
+}
+
+export function actionLabel(action: string): string {
+  return ACTIONS[action] ?? titleCase(action)
+}
