@@ -1,0 +1,13 @@
+backend/target/
+backend/src/main/resources/static/
+frontend/node_modules/
+frontend/dist/
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.idea/
+*.iml
+.DS_Store
+*.log
